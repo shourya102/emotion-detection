@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>Emotion Detection</title>
+    <script src="https://unpkg.com/@tailwindcss/browser@4"></script>
+</head>
+<body>
+<main class="min-h-screen w-full flex flex-col gap-4 md:gap-10 bg-black p-4 md:p-10">
+    <h1 class="text-xl md:text-2xl font-bold text-neutral-300">Emotion Detection</h1>
+
+    <div class="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-10">
+        <div class="bg-neutral-900 rounded-2xl border border-neutral-700 overflow-hidden flex flex-col">
+            <div class="relative flex-1 aspect-square md:aspect-video">
+                <video autoplay class="w-full h-full object-cover" id="video"></video>
+                <canvas class="hidden absolute inset-0 w-full h-full object-cover" id="canvas"></canvas>
+            </div>
+            <div class="flex flex-col sm:flex-row gap-2 p-4 bg-neutral-800">
+                <input accept="image/*" class="hidden" id="upload" type="file"/>
+                <button class="bg-blue-600 hover:bg-blue-800 cursor-pointer transition-colors flex items-center justify-center gap-2 p-3 sm:p-2 flex-1 rounded-lg"
+                        id="capture">
+                    <img alt="capture" class="w-6 h-6 md:w-8 md:h-8" src="../static/capture.svg">
+                    <span class="text-white text-sm md:text-base">Capture</span>
+                </button>
+                <label class="cursor-pointer flex items-center justify-center gap-2 p-3 sm:p-2 flex-1 rounded-lg bg-neutral-700 hover:bg-neutral-600 transition-colors"
+                       for="upload">
+                    <img alt="upload" class="w-6 h-6 md:w-8 md:h-8" src="../static/upload.svg">
+                    <span class="text-white text-sm md:text-base">Upload</span>
+                </label>
+            </div>
+        </div>
+        <div class="bg-neutral-900 rounded-2xl border border-neutral-700 p-4 md:p-6 lg:p-10">
+            <div class="grid grid-cols-1 gap-2 md:gap-4">
+                <div class="grid grid-cols-2 items-center gap-4 py-2 border-b border-neutral-700">
+                    <span class="text-neutral-400 text-sm md:text-base">Emotions Detected</span>
+                    <span class="text-neutral-300 text-sm md:text-base break-words" id="emotions">
+                        None
+                    </span>
+                </div>
+                <div class="grid grid-cols-2 items-center gap-4 py-2 border-b border-neutral-700">
+                    <span class="text-neutral-400 text-sm md:text-base">Valence</span>
+                    <span class="text-neutral-300 text-sm md:text-base" id="valence">
+                        None
+                    </span>
+                </div>
+                <div class="grid grid-cols-2 items-center gap-4 py-2 border-b border-neutral-700">
+                    <span class="text-neutral-400 text-sm md:text-base">Arousal</span>
+                    <span class="text-neutral-300 text-sm md:text-base" id="arousal">
+                        None
+                    </span>
+                </div>
+                <div class="grid grid-cols-2 items-center gap-4 py-2">
+                    <span class="text-neutral-400 text-sm md:text-base">Dominance</span>
+                    <span class="text-neutral-300 text-sm md:text-base" id="dominance">
+                        None
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+
+<script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const captureButton = document.getElementById('capture');
+    const uploadInput = document.getElementById('upload');
+    let isCameraActive = false;
+
+    function sendImageToServer(imageData) {
+        fetch('/detect_emotion', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({image: imageData})
+        })
+            .then(response => response.json())
+            .then(data => {
+                console.log(data)
+                document.getElementById('emotions').innerText = data.emotion || 'None';
+                document.getElementById('valence').innerHTML = data.vad.Valence || 'None';
+                document.getElementById('arousal').innerText = data.vad.Arousal || 'None';
+                document.getElementById('dominance').innerText = data.vad.Dominance || 'None';
+            })
+            .catch(error => console.error('Error:', error));
+    }
+
+    function startCamera() {
+        navigator.mediaDevices.getUserMedia({video: true})
+            .then(stream => {
+                video.srcObject = stream;
+                isCameraActive = true;
+                captureButton.querySelector('span').textContent = 'Capture';
+                video.style.display = 'block';
+                canvas.classList.add('hidden');
+            })
+            .catch(err => console.error('Error accessing webcam:', err));
+    }
+
+    startCamera();
+
+    captureButton.addEventListener('click', () => {
+        if (isCameraActive) {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0);
+            const imageData = canvas.toDataURL('image/jpeg');
+            sendImageToServer(imageData);
+            canvas.classList.remove('hidden');
+            video.style.display = 'none';
+            video.srcObject.getTracks().forEach(track => track.stop());
+            isCameraActive = false;
+            captureButton.querySelector('span').textContent = 'Start Camera';
+        } else {
+            startCamera();
+        }
+    });
+
+    uploadInput.addEventListener('change', (event) => {
+        const file = event.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                sendImageToServer(e.target.result)
+                if (isCameraActive) {
+                    video.srcObject.getTracks().forEach(track => track.stop());
+                    isCameraActive = false;
+                    captureButton.querySelector('span').textContent = 'Start Camera';
+                }
+                const img = new Image();
+                img.onload = () => {
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    canvas.getContext('2d').drawImage(img, 0, 0);
+                    canvas.classList.remove('hidden');
+                    video.style.display = 'none';
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+</script>
+</body>
+</html>
