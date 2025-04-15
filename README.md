@@ -113,5 +113,6 @@ The dataset consists of:
 
 - **Libraries Used**: PyTorch, torchvision, OpenCV, NumPy, Matplotlib, Pandas.
 - **Pre-trained Models**: ResNet-50 and ResNet-18 from torchvision.
+- **Dataset**: EMOTIC
 
 This project provides a robust foundation for emotion detection using multi-modal deep learning techniques.
